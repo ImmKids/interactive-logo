@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>ZIM - Code Creativity</title>
+
+<!-- zimjs.com - JavaScript Canvas Framework -->
+<script type="module">
+
+import zim from "https://zimjs.org/cdn/017/zim";
+
+// See Docs under Frame for FIT, FILL, FULL, and TAG
+new Frame(FIT, 1024, 768, black, black, ready);
+function ready() {
+
+    // given F (Frame), S (Stage), W (width), H (height)
+    // put code here
+
+    const container = new Container(200,200).center().outline();
+
+    const outer = new Circle(100, purple)
+        .center()
+        .drag(container)
+        .addTo(container);
+        
+        
+    const middle = new Circle(50, red)
+    .center()
+    .drag(outer)
+    .addTo(container);
+
+
+    const innter = new Circle(10, green)
+        .center()
+        .drag(middle)
+        .addTo(container);
+
+    
+    
+
+} // end ready
+
+</script>
+<meta name="viewport" content="width=device-width, user-scalable=no" />
+</head>
+<body></body>
+</html>
