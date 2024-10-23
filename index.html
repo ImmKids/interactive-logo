@@ -1,90 +1,160 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta charset="utf-8" />
-<title>ZIM - Code Creativity</title>
+    <meta charset="utf-8" />
+    <title>Party Animal</title>
 
-<script src="https://unpkg.com/@rive-app/canvas@2.20.0"></script>
-<!-- zimjs.com - JavaScript Canvas Framework -->
-<script type="module">
+    <script src="https://unpkg.com/@rive-app/canvas@2.20.0"></script>
+    <!-- zimjs.com - JavaScript Canvas Framework -->
+    <script type="module">
 
-import zim from "https://zimjs.org/cdn/017/zim";
+        import zim from "https://zimjs.org/cdn/017/zim";
 
-// See Docs under Frame for FIT, FILL, FULL, and TAG
-new Frame(FIT, 1024, 1024, darker, darker, ready);
-function ready() {
+        // See Docs under Frame for FIT, FILL, FULL, and TAG
+        new Frame(FIT, 500, 500, "#1ADCEB", black, ready);
+        function ready() {
 
-// Given F, S, W, H or frame, stage, stageW, stageH
+            // create a rive canvas
+            const riveCanvas = document.createElement("canvas");
+            riveCanvas.setAttribute("width", 500);
+            riveCanvas.setAttribute("height", 500);
+            document.body.appendChild(riveCanvas);
 
+            // hide the canvas by default
+            riveCanvas.style.visibility = "hidden";
 
-// or could add a canvas tag to the body with width and height
-const riveCanvas = document.createElement("canvas");
-riveCanvas.setAttribute("width", 500);
-riveCanvas.setAttribute("height", 500);
-document.body.appendChild(riveCanvas);
+            // the trigger for pulling down in rive animation
+            let trigger = null;
 
-// hide the canvas tag
-riveCanvas.style.visibility = "hidden";
+            // from Rive
+            const r = new rive.Rive({
+                src: "hedgehog.riv",
+                artboard: "Artboard",
+                canvas: riveCanvas,
+                autoplay: true,
+                stateMachines: 'PullAction',
+                onLoad: () => {
+                    const inputs = r.stateMachineInputs('PullAction');
+                    trigger = inputs.find(i => i.name === 'pull');
+                }
+            });
 
-// from Rive
-const r = new rive.Rive({
-	src: "bouncing_ball.riv",
-	canvas: riveCanvas,
-	autoplay: true,
-    onLoad: () => {
-        const artboard = r.artboard;
-        console.log(artboard);
-    }
-});
+            const riveCanvasScale = 0.4;
+            const riveBitmap = new Bitmap(riveCanvas).sca(riveCanvasScale).center();
+            // riveBitmap.pos(10, (W - riveBitmap.height) / 2);
+            riveBitmap.on("click", e => {
+                trigger.fire();
+            });
 
-// could just make the Bitmap 
-new Bitmap(riveCanvas).sca(0.5).center().drag(); // for instance
+            const circle = new Circle(10, red).center();
 
-const fragment = `    
+             // for eye rigging
+            const maxPupilOffset = 7;
 
-#define time iTime
+            const leftPupil = new Circle(8, black).center();
+            const rightPupil = new Circle(8, black).center();
 
-#define time iTime
+            const eyeTargetLeft = new Circle(10, red).center().drag();
+            const eyeTargetRight = eyeTargetLeft; // Using the same target for both eyes
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec2 uv = fragCoord.xy / iResolution.xy;  // Normalized coordinates (0 to 1)
-    
-    // Move UV coordinates to range [-1, 1] for easier manipulation
-    uv = uv * 2.0 - 1.0;
-    
-    // Define wave parameters
-    float frequency = 4.0;  // Number of waves
-    float amplitude = 0.2;  // Height of the wave
-    float speed = 1.5;      // Speed of the wave movement
+            // Lerp function for easing
+            function lerp(a, b, t) {
+                return a + (b - a) * t;
+            }
 
-    // Calculate the y position of the wave based on a sine function
-    float wave = sin(uv.x * frequency + time * speed) * amplitude;
-    
-    // Draw the wave as a line (only color pixels close to the wave's y position)
-    float thickness = 0.02;  // Thickness of the wave line
-    float distToWave = abs(uv.y - wave);  // Distance from current fragment to wave
+            // fast sync at beginning
+            let easingFactor = 1;
+            let easingRightSide = 0.7; // slow down one eye
 
-    // Define color for the wave (blue-like water color)
-    vec3 waveColor = vec3(0.2, 0.4, 1.0);
+            // make eye follow slower and easing after first sync
+            timeout(0.1,()=>{
+                easingFactor = 0.1;
+            })
 
-    // If the fragment is close to the wave line, color it; otherwise, background color (black)
-    vec3 finalColor = mix(vec3(0.0), waveColor, smoothstep(thickness, 0.0, distToWave));
-    
-    // Set the fragment color
-    fragColor = vec4(finalColor, 1.0);
-}
+            Ticker.add(() => {
+                if (r && r.artboard) {
 
+                    // Update the HAND_TIP node position
+                    const handTip = r.artboard.node("HAND_TIP");
+                    if (handTip) {
+                        const transform = handTip.worldTransform();
+                        const x = transform.tx * riveCanvasScale + riveBitmap.x;
+                        const y = transform.ty * riveCanvasScale + riveBitmap.y;
+                        circle.x = x;
+                        circle.y = y;
+                    }
 
-    `;   
+                    // Update the LEFT_PUPIL and RIGHT_PUPIL positions
+                    const leftPupilNode = r.artboard.node("LEFT_PUPIL");
+                    const rightPupilNode = r.artboard.node("RIGHT_PUPIL");
 
-	new Shader(500, 500, fragment).alp(0.3).center();
-    
-    Ticker.always(); 
+                    if (leftPupilNode) {
+                        const leftEyeTransform = leftPupilNode.worldTransform();
+                        const leftEyeCenter = {
+                            x: leftEyeTransform.tx * riveCanvasScale + riveBitmap.x,
+                            y: leftEyeTransform.ty * riveCanvasScale + riveBitmap.y
+                        };
 
-} // end ready
+                        const directionLeft = {
+                            x: eyeTargetLeft.x - leftEyeCenter.x,
+                            y: eyeTargetLeft.y - leftEyeCenter.y
+                        };
 
-</script>
-<meta name="viewport" content="width=device-width, user-scalable=no" />
+                        const distanceLeft = Math.hypot(directionLeft.x, directionLeft.y);
+                        const normalizedLeft = distanceLeft > 0 ? {
+                            x: directionLeft.x / distanceLeft,
+                            y: directionLeft.y / distanceLeft
+                        } : { x: 0, y: 0 };
+
+                        const offsetLeft = {
+                            x: normalizedLeft.x * Math.min(distanceLeft, maxPupilOffset),
+                            y: normalizedLeft.y * Math.min(distanceLeft, maxPupilOffset)
+                        };
+
+                        // Smoothly follow
+                        leftPupil.x = lerp(leftPupil.x, leftEyeCenter.x + offsetLeft.x, easingFactor);
+                        leftPupil.y = lerp(leftPupil.y, leftEyeCenter.y + offsetLeft.y, easingFactor);
+                    }
+
+                    if (rightPupilNode) {
+                        const rightEyeTransform = rightPupilNode.worldTransform();
+                        const rightEyeCenter = {
+                            x: rightEyeTransform.tx * riveCanvasScale + riveBitmap.x,
+                            y: rightEyeTransform.ty * riveCanvasScale + riveBitmap.y
+                        };
+
+                        const directionRight = {
+                            x: eyeTargetRight.x - rightEyeCenter.x,
+                            y: eyeTargetRight.y - rightEyeCenter.y
+                        };
+
+                        const distanceRight = Math.hypot(directionRight.x, directionRight.y);
+                        const normalizedRight = distanceRight > 0 ? {
+                            x: directionRight.x / distanceRight,
+                            y: directionRight.y / distanceRight
+                        } : { x: 0, y: 0 };
+
+                        const offsetRight = {
+                            x: normalizedRight.x * Math.min(distanceRight, maxPupilOffset),
+                            y: normalizedRight.y * Math.min(distanceRight, maxPupilOffset)
+                        };
+
+                        // Smoothly follow
+                        rightPupil.x = lerp(rightPupil.x, rightEyeCenter.x + offsetRight.x, easingFactor*easingRightSide);
+                        rightPupil.y = lerp(rightPupil.y, rightEyeCenter.y + offsetRight.y, easingFactor*easingRightSide);
+                    }
+                }
+            });
+
+            Ticker.always();
+
+        } // end ready
+
+    </script>
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
 </head>
+
 <body></body>
+
 </html>
