@@ -10,10 +10,15 @@
     <script type="module">
 
         import zim from "https://zimjs.org/cdn/017/zim";
+        import { BallonRope } from "../js/ballon-rope.js"
 
         // See Docs under Frame for FIT, FILL, FULL, and TAG
-        new Frame(FIT, 500, 500, "#1ADCEB", black, ready);
+        new Frame(FIT, 500, 500, black, black, ready);
         function ready() {
+
+
+            // given F (Frame), S (Stage), W (width), H (height)
+
 
             // create a rive canvas
             const riveCanvas = document.createElement("canvas");
@@ -27,9 +32,23 @@
             // the trigger for pulling down in rive animation
             let trigger = null;
 
-            // from Rive
+            const topRect = new Rectangle({ width: W * 0.8, height: H * 0.8, color: "#A7F5FA", corner: 100 }).center();
+
+            const topTri1 = new Triangle({ a: 360, b: 360, c:320, color: "#8FFAC5" }).center();
+            topTri1.y -= 20;
+
+            // insert shader here
+
+            const emitter = new Emitter({
+                obj: new Circle(3, [orange, yellow, pink]),
+                num: 10,
+                gravity: -3.5,
+                life: { min: 0.5, max: 0.7 },
+            }).center();
+
+            // load rive animation
             const r = new rive.Rive({
-                src: "hedgehog.riv",
+                src: "assets/hedgehog.riv",
                 artboard: "Artboard",
                 canvas: riveCanvas,
                 autoplay: true,
@@ -40,23 +59,29 @@
                 }
             });
 
-            const riveCanvasScale = 0.4;
-            const riveBitmap = new Bitmap(riveCanvas).sca(riveCanvasScale).center();
-            // riveBitmap.pos(10, (W - riveBitmap.height) / 2);
+            const riveCanvasScale = 0.35;
+            const riveBitmap = new Bitmap(riveCanvas).sca(riveCanvasScale).loc(222, W - riveCanvasScale * 500 - 60);
             riveBitmap.on("click", e => {
                 trigger.fire();
             });
 
-            const circle = new Circle(10, red).center();
+            // max pupil offset for eye rigging
+            const maxPupilOffset = 25 * riveCanvasScale;
 
-             // for eye rigging
-            const maxPupilOffset = 7;
+            const pupileSize = 15;
+            const leftPupil = new Circle(pupileSize * riveCanvasScale, darker, "#FF0000").center();
+            const rightPupil = new Circle(pupileSize * riveCanvasScale, darker, "#FF0000").center();
 
-            const leftPupil = new Circle(8, black).center();
-            const rightPupil = new Circle(8, black).center();
+            const ropeLayer = new Shape(500, 500).center();
 
-            const eyeTargetLeft = new Circle(10, red).center().drag();
-            const eyeTargetRight = eyeTargetLeft; // Using the same target for both eyes
+            const ballonColor = "#9435D5";
+
+            const ballon = new Label({ text: "FLOATY", size: 100, align: CENTER, font: "verdana", color: red, outlineWidth: 10, outlineColor: red }).reg(CENTER, TOP).center()
+            // fake rotation of the text
+            ballon.wiggle("rotation", ballon.rotation, 0, 10, 3, 10);
+            // using the same target for both eyes
+            const eyeTargetLeft = ballon;
+            const eyeTargetRight = ballon;
 
             // Lerp function for easing
             function lerp(a, b, t) {
@@ -68,23 +93,63 @@
             let easingRightSide = 0.7; // slow down one eye
 
             // make eye follow slower and easing after first sync
-            timeout(0.1,()=>{
+            timeout(0.1, () => {
                 easingFactor = 0.1;
-            })
+            });
 
-            Ticker.add(() => {
+
+            // create the rope and update the start point
+            const rope = new BallonRope({
+                numParticles: 100,
+                segmentLength: 2,
+                compliance: 0.001,
+                gravity: 0.0005,
+                iterations: 5,
+                buoyancyForce: 0.1
+            });
+
+            let tickCounter = 0; // counter to track the number of ticks
+            const maxTicksForDelta = 5;
+
+            Ticker.add((e) => {
+                const dt = e.delta;
                 if (r && r.artboard) {
-
-                    // Update the HAND_TIP node position
+                    // update the HAND_TIP node position and do the following rope simulation
                     const handTip = r.artboard.node("HAND_TIP");
                     if (handTip) {
                         const transform = handTip.worldTransform();
                         const x = transform.tx * riveCanvasScale + riveBitmap.x;
                         const y = transform.ty * riveCanvasScale + riveBitmap.y;
-                        circle.x = x;
-                        circle.y = y;
-                    }
 
+                        // start rope follow and simulation
+                        const startTip = { x, y }; // New start point for the rope
+                        rope.updateStartPoint(startTip, tickCounter < maxTicksForDelta);
+                        // apply random impulse for the first few frames
+                        if (tickCounter < maxTicksForDelta) {
+                            rope.applyImpulse(Math.random(), Math.random());
+                        }
+                        rope.simulate(dt);
+                        const ropePositions = rope.getParticlePositions();
+
+                        // render the rope
+                        const ropeColor = black;
+                        ropeLayer.c();
+                        ropeLayer.s(ropeColor);
+                        ropeLayer.mt(ropePositions[0].x, ropePositions[0].y)
+
+                        for (let i = 0; i < ropePositions.length - 1; i++) {
+                            const next = (i + 1) % ropePositions.length;
+                            ropeLayer.lt(ropePositions[next].x, ropePositions[next].y);
+                        }
+
+                        ballon.x = ropePositions[ropePositions.length - 1].x;
+                        ballon.y = ropePositions[ropePositions.length - 1].y;
+
+                        emitter.x = ballon.x;
+                        emitter.y = ballon.y;
+
+                        tickCounter++;
+                    }
                     // Update the LEFT_PUPIL and RIGHT_PUPIL positions
                     const leftPupilNode = r.artboard.node("LEFT_PUPIL");
                     const rightPupilNode = r.artboard.node("RIGHT_PUPIL");
@@ -115,6 +180,7 @@
                         // Smoothly follow
                         leftPupil.x = lerp(leftPupil.x, leftEyeCenter.x + offsetLeft.x, easingFactor);
                         leftPupil.y = lerp(leftPupil.y, leftEyeCenter.y + offsetLeft.y, easingFactor);
+
                     }
 
                     if (rightPupilNode) {
@@ -141,13 +207,16 @@
                         };
 
                         // Smoothly follow
-                        rightPupil.x = lerp(rightPupil.x, rightEyeCenter.x + offsetRight.x, easingFactor*easingRightSide);
-                        rightPupil.y = lerp(rightPupil.y, rightEyeCenter.y + offsetRight.y, easingFactor*easingRightSide);
+                        rightPupil.x = lerp(rightPupil.x, rightEyeCenter.x + offsetRight.x, easingFactor * easingRightSide);
+                        rightPupil.y = lerp(rightPupil.y, rightEyeCenter.y + offsetRight.y, easingFactor * easingRightSide);
+
                     }
                 }
+
             });
 
-            Ticker.always();
+            ballon.on("click", () => { rope.applyImpulse(Math.random() * 50 - 100, Math.random() * 50 - 100); })
+
 
         } // end ready
 
